@@ -19,6 +19,8 @@ type Genome struct {
 	B2 [outputSize]float64
 
 	currentFiness float32
+
+	guessedWords int
 }
 
 func newGenome() *Genome {

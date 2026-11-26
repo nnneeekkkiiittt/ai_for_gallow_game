@@ -60,8 +60,11 @@ func generateGame(words []string) GameState {
 }
 
 func assessGenome(genome *Genome, state GameState) {
-	genome.currentFiness += (float32)(100*state.Won) + (float32)(50*(1-(state.LettersRemained/state.Length))*
-		(1-(state.LettersRemained/state.Length))) + (float32)(5*state.HP) - (float32)(20*state.CountOfRepetitions)
+	progress := 1 - float32(state.LettersRemained)/float32(state.Length)
+	genome.currentFiness += 100*float32(state.Won) +
+		50*progress*progress +
+		5*float32(state.HP) -
+		20*float32(state.CountOfRepetitions)
 }
 
 func runGame(genome *Genome, state GameState) GameState {
@@ -77,7 +80,7 @@ func runGame(genome *Genome, state GameState) GameState {
 			return state
 		}
 
-		letter := state.Genome.pickLetter(state)
+		letter := genome.pickLetter(state)
 		runeLetter := rune(letter + 97)
 		if state.Letters[letter] != 0 {
 			state.HP--
@@ -104,18 +107,25 @@ func runGeneration(generation []*Genome, circles int) {
 	words := extractWords()
 	for i := range circles {
 		fmt.Println("Начинаем круг ", i+1)
+		guessed := 0
 		state := generateGame(words)
 		fmt.Println("Загадано слово: ", strings.ToUpper(state.Word))
 		for k, genome := range generation {
 			resState := runGame(genome, state)
-			fmt.Println("Воркер номер ", k, ": ", formatMask(resState.Mask, resState.Length))
+			var bonChar string
+			if resState.Won == 1 {
+				guessed++
+				bonChar = " +++!!!"
+			}
+			fmt.Println("Воркер номер ", k+1, ": ", formatMask(resState.Mask, resState.Length), bonChar)
 		}
+		fmt.Println("Слово ", strings.ToUpper(state.Word), " угадало ", guessed, " воркеров из ", len(generation))
 	}
 }
 
 func formatMask(mask [20]int, length int) string {
 	var s strings.Builder
-	alphabet := []rune("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
+	alphabet := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	for i := range length {
 		c := mask[i]
 		if c == -1 {
