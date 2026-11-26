@@ -11,23 +11,11 @@ import (
 const fileName = "google-10000-english-usa-no-swears-long.txt"
 const baseHP = 5
 
-type GameState struct {
-	HP                 int
-	Word               string
-	Letters            [26]int
-	Length             int
-	Mask               [20]int
-	Genome             *Genome
-	CountOfRepetitions int
-	LettersRemained    int
-	Attempt            int
-}
-
-func extractWords() ([]string, error) {
+func extractWords() []string {
 	words := []string{}
 	file, err := os.Open(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %v", err)
+		return nil
 	}
 	defer file.Close()
 
@@ -37,18 +25,14 @@ func extractWords() ([]string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read the file: %v", err)
+		return nil
 	}
 
-	return words, nil
+	return words
 
 }
 
-func generateGame() (*GameState, error) {
-	words, err := extractWords()
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract words: %v", err)
-	}
+func generateGame(words []string) GameState {
 	word := words[rand.Int()%len(words)]
 
 	// letter was picked - score from -1 to 1
@@ -63,7 +47,7 @@ func generateGame() (*GameState, error) {
 		mask[i] = -1
 	}
 
-	return &GameState{
+	return GameState{
 		HP:                 baseHP,
 		Word:               word,
 		Letters:            letters,
@@ -72,35 +56,73 @@ func generateGame() (*GameState, error) {
 		LettersRemained:    len(word),
 		CountOfRepetitions: 0,
 		Attempt:            0,
-	}, nil
+	}
 }
 
-func game(state *GameState) bool {
-	if state.HP == 0 {
-		return false
-	}
-	if state.LettersRemained == 0 {
-		return true
-	}
-	state.Attempt++
-	letter := state.Genome.pickLetter(*state)
-	runeLetter := rune(letter + 97)
-	if state.Letters[letter] != 0 {
-		state.HP--
-		state.CountOfRepetitions++
-	} else {
-		if strings.ContainsRune(state.Word, runeLetter) {
-			for i := range state.Length {
-				if state.Word[i] == byte(runeLetter) {
-					state.Mask[i] = letter
-					state.Letters[letter]++
-					state.LettersRemained--
-				}
-			}
-		} else {
+func assessGenome(genome *Genome, state GameState) {
+	genome.currentFiness += (float32)(100*state.Won) + (float32)(50*(1-(state.LettersRemained/state.Length))*
+		(1-(state.LettersRemained/state.Length))) + (float32)(5*state.HP) - (float32)(20*state.CountOfRepetitions)
+}
+
+func runGame(genome *Genome, state GameState) GameState {
+	for {
+		if state.HP == 0 {
+			state.Won = 0
+			assessGenome(genome, state)
+			return state
+		}
+		if state.LettersRemained == 0 {
+			state.Won = 1
+			assessGenome(genome, state)
+			return state
+		}
+
+		letter := state.Genome.pickLetter(state)
+		runeLetter := rune(letter + 97)
+		if state.Letters[letter] != 0 {
 			state.HP--
-			state.Letters[letter] = -1
+			state.CountOfRepetitions++
+		} else {
+			if strings.ContainsRune(state.Word, runeLetter) {
+				for i := range state.Length {
+					if state.Word[i] == byte(runeLetter) {
+						state.Mask[i] = letter
+						state.Letters[letter]++
+						state.LettersRemained--
+					}
+				}
+			} else {
+				state.HP--
+				state.Letters[letter] = -1
+			}
+		}
+
+	}
+}
+
+func runGeneration(generation []*Genome, circles int) {
+	words := extractWords()
+	for i := range circles {
+		fmt.Println("Начинаем круг ", i+1)
+		state := generateGame(words)
+		fmt.Println("Загадано слово: ", strings.ToUpper(state.Word))
+		for k, genome := range generation {
+			resState := runGame(genome, state)
+			fmt.Println("Воркер номер ", k, ": ", formatMask(resState.Mask, resState.Length))
 		}
 	}
-	return game(state)
+}
+
+func formatMask(mask [20]int, length int) string {
+	var s strings.Builder
+	alphabet := []rune("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
+	for i := range length {
+		c := mask[i]
+		if c == -1 {
+			s.WriteString("_")
+		} else {
+			s.WriteString(string(alphabet[mask[i]]))
+		}
+	}
+	return s.String()
 }
